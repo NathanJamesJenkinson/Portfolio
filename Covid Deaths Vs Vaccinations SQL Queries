@@ -1,0 +1,121 @@
+--Covid Project
+
+--Upload Covid Deaths and Covid Vaccinations as CSV files into Bigquery, not XLSX files. The opposite is true in mSQL as AtA uses. Check them with:
+
+--Use -- to create in-line notes.
+--Use backticks `table/column path` to identify specific tables/columns in BQ.
+
+--SELECT * FROM `Covid.CovidDeaths`
+--ORDER BY 3,4
+
+
+SELECT Location, date, total_cases, new_cases, total_deaths, population
+FROM `Covid.CovidDeaths`
+ORDER BY 1, 2
+
+--Total cases vs Total deaths:
+--Likelihood of dying if you contract Covid is a particular country, such as the US:
+SELECT Location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 AS DeathPercentage
+FROM `Covid.CovidDeaths`
+WHERE Location LIKE '%States%'
+ORDER BY 1, 2
+
+--Total Cases vs Population %
+SELECT Location, date, total_cases, Population, (total_cases/population)*100 AS DeathPercentage
+FROM `Covid.CovidDeaths`
+WHERE location LIKE '%States%'
+ORDER BY 1, 2
+
+--Maximum Infected at any time in each country:
+SELECT Location, Population, MAX((total_cases/population))*100 AS PercentageMaxInfected
+FROM `Covid.CovidDeaths`
+GROUP BY Location, Population
+ORDER BY PercentageMaxInfected desc
+
+--Maximum deaths at any time in each country:
+SELECT Location, MAX(total_deaths) AS DeathCount
+FROM `Covid.CovidDeaths`
+WHERE continent IS NOT null
+GROUP BY Location
+ORDER BY DeathCount desc
+
+--Maximum deaths at any time in each continent:
+SELECT location, MAX(total_deaths) AS DeathCount
+FROM `Covid.CovidDeaths`
+WHERE continent IS null
+GROUP BY Location
+ORDER BY DeathCount desc
+
+--Maximum deaths by population at any time in each continent:
+SELECT location, MAX((total_deaths/population))*100 AS DeathCountPercentage
+FROM `Covid.CovidDeaths`
+WHERE continent IS null
+GROUP BY Location
+ORDER BY DeathCountPercentage desc
+
+--Global values by date
+SELECT date, SUM(total_cases) AS TotalCases, SUM(total_deaths) AS TotalDeaths, SUM((total_deaths/total_cases))*100 AS DeathPercentage
+FROM `Covid.CovidDeaths`
+WHERE continent IS NOT null
+GROUP BY date
+ORDER BY 1, 2
+
+--Global values by location
+SELECT location, SUM(total_cases) AS TotalCases, SUM(total_deaths) AS TotalDeaths, SUM((total_deaths/total_cases))*100 AS DeathPercentage
+FROM `Covid.CovidDeaths`
+WHERE continent IS NOT null
+GROUP BY location
+ORDER BY 1, 2
+
+--Overall JOIN. CD is CovidDeaths and CV is CovidVaccinations. In a JOIN you must refer to columns from their tables by putting the table.column, as in CD.location vs CV.location, because those are technically columns in different tables even though they contain the same data.
+SELECT *
+FROM `Covid.CovidDeaths` CD
+JOIN `Covid.CovidVaccinations` CV
+ON CD.location = CV.location
+AND CD.date = CV.date
+
+--JOIN for cumulative sum of new vaccinations. This makes use of CD.continent IS NOT NULL in order to remove all of the continents and population groups that are larger than a country. It also removes all CV.new_vaccinations that are empty in the same way.
+SELECT CD.continent, CD.location, CD.date, CD.population, CV.new_vaccinations, SUM(CV.new_vaccinations) OVER (PARTITION BY CD.location ORDER BY CD.location, CD.date) AS CumulativeVaccines
+FROM `Covid.CovidDeaths` CD
+JOIN `Covid.CovidVaccinations` CV
+  ON CD.location = CV.location
+  AND CD.date = CV.date
+WHERE CD.continent IS NOT null
+AND CV.new_vaccinations IS NOT null
+ORDER BY 2,3
+
+--Create a temp table. BQ uses CREATE OR REPLACE TEMP TABLE name, whereas mSQL uses DROP TABLE IF EXISTS #name CREATE TABLE #name. BQ uses string, mSQL uses nvarchar (non-variable-character).
+
+
+CREATE OR REPLACE TEMP TABLE PopulationVsVaccination
+
+
+(Continent string(255),
+Location string(255),
+Date datetime,
+Population numeric,
+New_vaccinations numeric,
+CumulativeVaccines numeric);
+
+
+  SELECT CD.continent, CD.location, CD.date, CD.population, CV.new_vaccinations, SUM(CV.new_vaccinations) OVER (PARTITION BY CD.location ORDER BY CD.location, CD.date) AS CumulativeVaccines
+FROM `Covid.CovidDeaths` CD
+JOIN `Covid.CovidVaccinations` CV
+  ON CD.location = CV.location
+  AND CD.date = CV.date
+WHERE CD.continent IS NOT null
+AND CV.new_vaccinations IS NOT null
+ORDER BY 2,3
+
+--Create View to store data. Once again BQ uses CREATE OR REPLACE. BQ requires a complete path to create the view: dataset.table, as in Covid.PercentPopulationVsVaccination. Note that PercentPopulationVsVaccination was created by the previous commands and this won't work unless that temp table has been created.
+
+
+CREATE OR REPLACE VIEW Covid.PercentPopulationVsVaccination
+AS SELECT CD.continent, CD.location, CD.date, CD.population, CV.new_vaccinations, SUM(CV.new_vaccinations) OVER (PARTITION BY CD.location ORDER BY CD.location, CD.date) AS CumulativeVaccines
+FROM `Covid.CovidDeaths` CD
+JOIN `Covid.CovidVaccinations` CV
+  ON CD.location = CV.location
+  AND CD.date = CV.date
+WHERE CD.continent IS NOT null
+AND CV.new_vaccinations IS NOT null
+ORDER BY 2,3
