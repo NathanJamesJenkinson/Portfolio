@@ -969,7 +969,7 @@ sb.scatterplot(data=data, x=opinion_mask.video_like_count, y=opinion_mask.video_
 ![png](output_50_1.png)
 
 
-Create a scatterplot in Tableau Public. https://public.tableau.com/shared/6RFK9G4KT?:display_count=n&:origin=viz_share_link
+Create a scatterplot in Tableau Public. https://public.tableau.com/views/TikTokEDA_16890178963150/TikTokEDA?:language=en-US&:display_count=n&:origin=viz_share_link
 
 ### **Results and evaluation**
 
