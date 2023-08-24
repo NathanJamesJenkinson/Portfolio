@@ -653,6 +653,37 @@ df.video_like_count.max()
 
 
 
+
+```python
+df.video_comment_count.max()
+```
+
+
+
+
+
+
+
+```python
+# Check for and handle outliers for video_comment_count
+for x in ['video_comment_count']:
+    q75,q25 = np.nanpercentile(df.loc[:,x],[75,25])
+    iqr = q75-q25
+ 
+    max = np.nanmedian(df.video_comment_count)+(1.5*iqr)
+    
+    df.loc[df[x] > max,x] = np.nan
+```
+
+
+```python
+df.video_comment_count.max()
+```
+
+
+
+
+
 ```python
 # Check class balance for video_comment_count
 Vmask = df[df.verified_status == 'verified']
@@ -1088,107 +1119,6 @@ One of the model assumptions for logistic regression is no severe multicollinear
 
 View and like, view and share, view and download, like and share, like a download, and download and comment are all possible suspects of multicollinearity. Basically, every engagement variable has at least one relationship with another one.
 
-### **Select variables**
-
-Outcome (Y) variable is claim_status, independent variables are video_duration_sec, video_view_count, video_like_count, video_share_count, video_download_count, video_comment_count, and VTL (video text length).
-
-Select the features.
-
-
-```python
-# Select features using backward elimination via Variance Inflation Factor
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-
-# Create VTL for dfdrop
-dfdrop['VTL'] = dfdrop['video_transcription_text'].str.len()
-
-# Create dummies for claim_status
-dfdrop['claim_status'] = dfdrop['claim_status'].map({'opinion':0, 'claim':1})
-# 0 for opinion, 1 for claim
-  
-# Identify independent variables set
-X = dfdrop[['video_duration_sec','video_view_count','video_like_count','video_share_count','video_download_count','video_comment_count',
-'VTL']]
-
-# VIF dataframe
-vif_data = pd.DataFrame()
-vif_data["feature"] = X.columns
-  
-# Calculate VIF for each feature
-vif_data["VIF"] = [variance_inflation_factor(X.values, i)
-                          for i in range(len(X.columns))]
-  
-print(vif_data)
-
-# Likes and Downloads both have VIFs > 5. Likes will be removed and tested again.
-```
-
-                    feature       VIF
-    0    video_duration_sec  4.145062
-    1      video_view_count  4.690648
-    2      video_like_count  9.863807
-    3     video_share_count  4.004301
-    4  video_download_count  6.812488
-    5   video_comment_count  3.883154
-    6                   VTL  4.887796
-
-
-
-```python
-# Reduce independent variables by higest VIF: likes
-X = dfdrop[['video_duration_sec','video_view_count','video_share_count','video_download_count','video_comment_count',
-'VTL']]
-
-# VIF dataframe
-vif_data = pd.DataFrame()
-vif_data["feature"] = X.columns
-  
-# Calculate VIF for each remaining feature
-vif_data["VIF"] = [variance_inflation_factor(X.values, i)
-                          for i in range(len(X.columns))]
-  
-print(vif_data)
-
-# Downloads have a VIF > 5 so it should be removed in another iteration.
-```
-
-                    feature       VIF
-    0    video_duration_sec  4.145061
-    1      video_view_count  3.520326
-    2     video_share_count  2.794422
-    3  video_download_count  5.604303
-    4   video_comment_count  3.882813
-    5                   VTL  4.887784
-
-
-
-```python
-# Reduce independent variables again by higest VIF: likes and downloads
-X = dfdrop[['video_duration_sec','video_view_count','video_share_count','video_comment_count',
-'VTL']]
-
-# VIF dataframe
-vif_data = pd.DataFrame()
-vif_data["feature"] = X.columns
-  
-# Calculate new VIF for each remaining feature
-vif_data["VIF"] = [variance_inflation_factor(X.values, i)
-                          for i in range(len(X.columns))]
-  
-print(vif_data)
-
-# All of the features have a VIF < 5 and are therefore acceptable in a logistic regression.
-```
-
-                   feature       VIF
-    0   video_duration_sec  4.142992
-    1     video_view_count  3.253568
-    2    video_share_count  2.567679
-    3  video_comment_count  1.930606
-    4                  VTL  4.885810
-
-
-
 ```python
 # Get unique values in `claim_status`
 dfdrop['claim_status'] = dfdrop['claim_status'].map({0:'opinion', 1:'claim'})
@@ -1278,92 +1208,6 @@ print(dfenc.head(2))
 
 
 
-```python
-# Fit and transform the training features using the encoder
-X = dfenc[['video_duration_sec','video_view_count','video_share_count','video_comment_count',
-'VTL','author_ban_status_active','author_ban_status_banned','author_ban_status_under_review','claim_status_claim']]
-
-# VIF dataframe
-vif_data = pd.DataFrame()
-vif_data["feature"] = X.columns
-  
-# Calculate new VIF for each remaining feature
-vif_data["VIF"] = [variance_inflation_factor(X.values, i)
-                          for i in range(len(X.columns))]
-  
-print(vif_data)
-
-# Note that including claim_status_opinion results in an error because claims and opinions
-# are perfect complements of each other within the claim_status column so only claim_status_claim is tested here.
-```
-
-                              feature        VIF
-    0              video_duration_sec   1.000651
-    1                video_view_count   3.377663
-    2               video_share_count   2.017365
-    3             video_comment_count   1.621337
-    4                             VTL   1.103550
-    5        author_ban_status_active  19.148064
-    6        author_ban_status_banned   3.164011
-    7  author_ban_status_under_review   3.589625
-    8              claim_status_claim   2.653298
-
-
-
-```python
-# Fit and transform the training features using the encoder: remove author_ban_status_active
-X = dfenc[['video_duration_sec','video_view_count','video_share_count','video_comment_count',
-'VTL','author_ban_status_banned','author_ban_status_under_review','claim_status_claim']]
-
-# VIF dataframe
-vif_data = pd.DataFrame()
-vif_data["feature"] = X.columns
-  
-# Calculate new VIF for each remaining feature
-vif_data["VIF"] = [variance_inflation_factor(X.values, i)
-                          for i in range(len(X.columns))]
-  
-print(vif_data)
-```
-
-                              feature       VIF
-    0              video_duration_sec  4.146030
-    1                video_view_count  5.479390
-    2               video_share_count  2.567876
-    3             video_comment_count  1.930746
-    4                             VTL  5.492152
-    5        author_ban_status_banned  1.184359
-    6  author_ban_status_under_review  1.190507
-    7              claim_status_claim  5.324973
-
-
-
-```python
-# Fit and transform the training features using the encoder: remove author_ban_status_active and claim_status_claim
-X = dfenc[['video_duration_sec','video_view_count','video_share_count','video_comment_count',
-'VTL','author_ban_status_banned','author_ban_status_under_review']]
-
-# VIF dataframe
-vif_data = pd.DataFrame()
-vif_data["feature"] = X.columns
-  
-# Calculate new VIF for each remaining feature
-vif_data["VIF"] = [variance_inflation_factor(X.values, i)
-                          for i in range(len(X.columns))]
-  
-print(vif_data)
-
-# This results in VIFs < 5, so these are the best variables to use as they do not have high multicollinearity.
-```
-
-                              feature       VIF
-    0              video_duration_sec  4.143068
-    1                video_view_count  3.345364
-    2               video_share_count  2.567874
-    3             video_comment_count  1.930620
-    4                             VTL  4.991513
-    5        author_ban_status_banned  1.154464
-    6  author_ban_status_under_review  1.167685
 
 
 
@@ -1755,6 +1599,35 @@ dfdrop.loc[:, ~dfdrop.columns.isin(['claim_status', 'author_ban_status'])]
 
 
 
+
+### **Select variables**
+
+Outcome (Y) variable is claim_status, independent variables are video_duration_sec, video_view_count, video_like_count, video_share_count, video_download_count, video_comment_count, and VTL (video text length).
+
+Select the features.
+
+
+```python
+# Select features using backward elimination via Variance Inflation Factor
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+# Create VTL for dfdrop
+dfdrop['VTL'] = dfdrop['video_transcription_text'].str.len()
+
+# Create dummies for claim_status
+dfdrop['claim_status'] = dfdrop['claim_status'].map({'opinion':0, 'claim':1})
+# 0 for opinion, 1 for claim
+  
+# Identify independent variables set
+X = dfdrop[['video_duration_sec','VTL','claim_status','author_ban_status_banned','author_ban_status_under_review','author_ban_status_active','video_view_count','video_like_count','video_share_count','video_download_count','video_comment_count']]
+# Note that including claim_status_claim and claim_status_opinion are not necessary because simply changing claim_status into a binary variable has the same effect.
+
+
+
+
+
+
+
 ### **Train-test split**
 
 
@@ -1762,8 +1635,7 @@ dfdrop.loc[:, ~dfdrop.columns.isin(['claim_status', 'author_ban_status'])]
 # Split the data into training and testing sets
 from sklearn.model_selection import train_test_split
 
-X = dfdrop[['video_duration_sec','video_view_count','video_like_count','video_share_count','video_download_count','video_comment_count',
-'VTL','author_ban_status_banned','author_ban_status_under_review','author_ban_status_active','claim_status_claim']]
+X = dfdrop[['video_duration_sec','VTL','claim_status','author_ban_status_banned','author_ban_status_under_review','author_ban_status_active','video_view_count','video_like_count','video_share_count','video_download_count','video_comment_count']]
 y = dfdrop['verified_status_verified']
   
 # using the train test split function
@@ -1998,109 +1870,6 @@ print(set(y_test))
 
 
 ### **Model building**
-
-
-```python
-# Construct a logistic regression model and fit it to the training set
-cols = ['video_duration_sec','video_view_count','video_share_count','video_comment_count',
-'VTL','author_ban_status_banned','author_ban_status_under_review']
-X=X_train[cols]
-y=y_train
-
-import statsmodels.api as sm
-logit_model=sm.Logit(y,X)
-result=logit_model.fit()
-print(result.summary2())
-
-# the P-values of share and comment are > .05 so they need to be removed.
-```
-
-    Optimization terminated successfully.
-             Current function value: inf
-             Iterations 8
-
-
-    /opt/conda/lib/python3.7/site-packages/statsmodels/base/model.py:548: HessianInversionWarning: Inverting hessian failed, no bse or cov_params available
-      'available', HessianInversionWarning)
-    /opt/conda/lib/python3.7/site-packages/statsmodels/base/model.py:548: HessianInversionWarning: Inverting hessian failed, no bse or cov_params available
-      'available', HessianInversionWarning)
-
-
-                                    Results: Logit
-    ===============================================================================
-    Model:                  Logit                       Pseudo R-squared:    inf   
-    Dependent Variable:     verified_status_verified    AIC:                 inf   
-    Date:                   2023-07-28 18:37            BIC:                 inf   
-    No. Observations:       14313                       Log-Likelihood:      -inf  
-    Df Model:               6                           LL-Null:             0.0000
-    Df Residuals:           14306                       LLR p-value:         1.0000
-    Converged:              1.0000                      Scale:               1.0000
-    No. Iterations:         8.0000                                                 
-    -------------------------------------------------------------------------------
-                                    Coef.  Std.Err.    z     P>|z|   [0.025  0.975]
-    -------------------------------------------------------------------------------
-    video_duration_sec             -0.0108   0.0019  -5.5329 0.0000 -0.0146 -0.0069
-    video_view_count               -0.0000   0.0000  -8.7712 0.0000 -0.0000 -0.0000
-    video_share_count               0.0000   0.0000   1.0666 0.2862 -0.0000  0.0000
-    video_comment_count             0.0000   0.0001   0.4952 0.6205 -0.0001  0.0002
-    VTL                            -0.0225   0.0009 -26.3884 0.0000 -0.0242 -0.0208
-    author_ban_status_banned       -0.4997   0.1795  -2.7842 0.0054 -0.8515 -0.1479
-    author_ban_status_under_review -0.5365   0.1525  -3.5180 0.0004 -0.8354 -0.2376
-    ===============================================================================
-    
-
-
-
-```python
-# Construct a logistic regression model and fit it to the training set
-cols = ['video_duration_sec','video_view_count',
-'VTL','author_ban_status_banned','author_ban_status_under_review']
-X=X_train[cols]
-y=y_train
-
-import statsmodels.api as sm
-logit_model=sm.Logit(y,X)
-result=logit_model.fit()
-print(result.summary2())
-
-# all of the P-values are < .05, so this is the final model.
-```
-
-    Optimization terminated successfully.
-             Current function value: inf
-             Iterations 8
-
-
-    /opt/conda/lib/python3.7/site-packages/statsmodels/base/model.py:548: HessianInversionWarning: Inverting hessian failed, no bse or cov_params available
-      'available', HessianInversionWarning)
-
-
-                                    Results: Logit
-    ===============================================================================
-    Model:                  Logit                       Pseudo R-squared:    inf   
-    Dependent Variable:     verified_status_verified    AIC:                 inf   
-    Date:                   2023-07-28 18:38            BIC:                 inf   
-    No. Observations:       14313                       Log-Likelihood:      -inf  
-    Df Model:               4                           LL-Null:             0.0000
-    Df Residuals:           14308                       LLR p-value:         1.0000
-    Converged:              1.0000                      Scale:               1.0000
-    No. Iterations:         8.0000                                                 
-    -------------------------------------------------------------------------------
-                                    Coef.  Std.Err.    z     P>|z|   [0.025  0.975]
-    -------------------------------------------------------------------------------
-    video_duration_sec             -0.0107   0.0019  -5.5261 0.0000 -0.0146 -0.0069
-    video_view_count               -0.0000   0.0000 -11.8161 0.0000 -0.0000 -0.0000
-    VTL                            -0.0225   0.0009 -26.4119 0.0000 -0.0242 -0.0208
-    author_ban_status_banned       -0.4993   0.1795  -2.7822 0.0054 -0.8511 -0.1476
-    author_ban_status_under_review -0.5370   0.1525  -3.5213 0.0004 -0.8359 -0.2381
-    ===============================================================================
-    
-
-
-    /opt/conda/lib/python3.7/site-packages/statsmodels/base/model.py:548: HessianInversionWarning: Inverting hessian failed, no bse or cov_params available
-      'available', HessianInversionWarning)
-
-
 
 ```python
 # Build regression model
